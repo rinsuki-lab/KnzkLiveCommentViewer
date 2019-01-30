@@ -1,0 +1,41 @@
+﻿<Window x:Class="KnzkLiveCommentViewer.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:extk="clr-namespace:Xceed.Wpf.Toolkit;assembly=Xceed.Wpf.Toolkit"
+        xmlns:local="clr-namespace:KnzkLiveCommentViewer"
+        mc:Ignorable="d"
+        Title="MainWindow" Height="450" Width="800">
+    <Window.DataContext>
+        <local:MainWindowModel />
+    </Window.DataContext>
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="1*" />
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="1*" />
+            <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+        <extk:WatermarkTextBox Watermark="配信URL(例: https://live.knzk.me/watch40)" Text="{Binding WatchPageUrl}"></extk:WatermarkTextBox>
+        <Button Grid.Column="1" Name="WatchStateButton" Click="WatchStateButton_Click">監視開始</Button>
+        <ListView x:Name="LogListView" Grid.Row="1" Grid.ColumnSpan="2" ItemsSource="{Binding Mode=OneWay}">
+            <ListView.View>
+                <GridView>
+                    <GridViewColumn Header="種類" DisplayMemberBinding="{Binding Type}"/>
+                    <GridViewColumn Header="ユーザー名" DisplayMemberBinding="{Binding UserName}"/>
+                    <GridViewColumn Header="コメント" Width="300">
+                        <GridViewColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock TextWrapping="Wrap" Text="{Binding Content}" />
+                            </DataTemplate>
+                        </GridViewColumn.CellTemplate>
+                    </GridViewColumn>
+                    <GridViewColumn Header="投稿時間" DisplayMemberBinding="{Binding CreatedAtString}"/>
+                </GridView>
+            </ListView.View>
+        </ListView>
+    </Grid>
+</Window>
