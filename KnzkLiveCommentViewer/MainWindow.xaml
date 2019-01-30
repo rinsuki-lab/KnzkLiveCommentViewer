@@ -5,7 +5,9 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:extk="clr-namespace:Xceed.Wpf.Toolkit;assembly=Xceed.Wpf.Toolkit"
         xmlns:local="clr-namespace:KnzkLiveCommentViewer"
+        xmlns:c="clr-namespace:CalcBinding;assembly=CalcBinding"
         mc:Ignorable="d"
+        
         Title="MainWindow" Height="450" Width="800">
     <Window.DataContext>
         <local:MainWindowModel />
@@ -19,8 +21,9 @@
             <ColumnDefinition Width="1*" />
             <ColumnDefinition Width="Auto"/>
         </Grid.ColumnDefinitions>
-        <extk:WatermarkTextBox Watermark="配信URL(例: https://live.knzk.me/watch40)" Text="{Binding WatchPageUrl}"></extk:WatermarkTextBox>
-        <Button Grid.Column="1" Name="WatchStateButton" Click="WatchStateButton_Click">監視開始</Button>
+        <extk:WatermarkTextBox Watermark="配信URL(例: https://live.knzk.me/watch40)" Text="{c:Binding WatchPageUrl}" IsEnabled="{c:Binding 'ConnectionState == local:ConnectionStateEnum.NotConnected'}"></extk:WatermarkTextBox>
+        <Button Grid.Column="1" Name="StartWatchButton" Click="StartWatchButton_Click" IsEnabled="{c:Binding 'ConnectionState == local:ConnectionStateEnum.NotConnected'}" Visibility="{c:Binding 'ConnectionState == local:ConnectionStateEnum.NotConnected or ConnectionState == local:ConnectionStateEnum.Connecting', FalseToVisibility=Hidden}" >監視開始</Button>
+        <Button Grid.Column="1" Name="StopWatchButton" IsEnabled="{c:Binding 'ConnectionState == local:ConnectionStateEnum.Connected'}" Visibility="{c:Binding '(ConnectionState == local:ConnectionStateEnum.Connected) or (ConnectionState == local:ConnectionStateEnum.Disconnecting)', FalseToVisibility=Hidden}">監視終了</Button>
         <ListView x:Name="LogListView" Grid.Row="1" Grid.ColumnSpan="2" ItemsSource="{Binding Mode=OneWay}">
             <ListView.View>
                 <GridView>

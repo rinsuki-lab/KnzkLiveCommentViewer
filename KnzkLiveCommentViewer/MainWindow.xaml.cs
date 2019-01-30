@@ -17,6 +17,7 @@ using System.IO;
 using System.Text.RegularExpressions;
 using System.Net.Http;
 using WebSocketSharp;
+using System.ComponentModel;
 
 namespace KnzkLiveCommentViewer
 {
@@ -41,18 +42,40 @@ namespace KnzkLiveCommentViewer
         {
             this.Dispatcher.Invoke(() =>
             {
+                int where = 0;
                 if (comment.CreatedAt == null || comment.CreatedAt.Ticks == 0)
                 {
                     comment.CreatedAt = new DateTime(DateTime.Now.Ticks);
+                } else
+                {
+                    foreach (var c in this.Comments)
+                    {
+                        if (comment.CreatedAt < c.CreatedAt) where++;
+                    }
                 }
-                this.Comments.Insert(0, comment);
+                this.Comments.Insert(where, comment);
             });
+            bouyomichan.say(comment.Content);
         }
 
-        private async void WatchStateButton_Click(object sender, RoutedEventArgs e)
+        private void ChangeConnectionState(ConnectionStateEnum state)
+        {
+            this.Dispatcher.Invoke(() =>
+            {
+                ((MainWindowModel)this.DataContext).ConnectionState = state;
+                ((MainWindowModel)this.DataContext).SetPropertyChanged("ConnectionState");
+            });
+
+        }
+
+        private async void StartWatchButton_Click(object sender, RoutedEventArgs e)
         {
             Console.WriteLine("clicked");
-
+            this.Dispatcher.Invoke(() =>
+            {
+                this.Comments.Clear();
+                this.ChangeConnectionState(ConnectionStateEnum.Connecting);
+            });
             var watchPageUrl = ((MainWindowModel)this.DataContext).WatchPageUrl;
             var regex = Regex.Match(watchPageUrl, "^https://live\\.knzk\\.me/watch([0-9]+)$");
             if (regex.Success == false)
@@ -63,6 +86,7 @@ namespace KnzkLiveCommentViewer
                     UserName = "Error",
                     Content = "URLがおかしいです",
                 });
+                this.ChangeConnectionState(ConnectionStateEnum.NotConnected);
                 return;
             }
             var id = int.Parse(regex.Groups[1].Value);
@@ -71,7 +95,6 @@ namespace KnzkLiveCommentViewer
                 UserName = "Info",
                 Content = "ID(=" + id + ")認識、配信情報を取得します…",
             });
-            Console.WriteLine(id);
 
             using (var client = new HttpClient())
             {
@@ -85,6 +108,7 @@ namespace KnzkLiveCommentViewer
                         UserName = "Error",
                         Content = "配信情報の取得に失敗(HTTP_STATUS=" + result.StatusCode + ")",
                     });
+                    this.ChangeConnectionState(ConnectionStateEnum.NotConnected);
                     return;
                 }
                 using (var stream = await result.Content.ReadAsStreamAsync())
@@ -110,6 +134,7 @@ namespace KnzkLiveCommentViewer
                     UserName = "Info",
                     Content = "Mastodonのストリームに接続しました",
                 });
+                this.ChangeConnectionState(ConnectionStateEnum.Connected);
             };
 
             ws.OnMessage += (_s, _e) =>
@@ -134,7 +159,6 @@ namespace KnzkLiveCommentViewer
                     Content = Regex.Replace(status.Content, "<.+?>", "").Replace("#" + this.liveInfo.Hashtag, ""),
                     CreatedAt = DateTime.Parse(status.CreatedAt),
                 };
-                this.bouyomichan.say(record.Content);
                 this.AddComment(record);
             };
             ws.Connect();
@@ -145,10 +169,24 @@ namespace KnzkLiveCommentViewer
             throw new NotImplementedException();
         }
     }
+    public enum ConnectionStateEnum
+    {
+        NotConnected,
+        Connecting,
+        Connected,
+        Disconnecting,
+    }
 
-    public class MainWindowModel
+    public class MainWindowModel: INotifyPropertyChanged
     {
         public string WatchPageUrl { get; set; }
+        public ConnectionStateEnum ConnectionState { get; set; } = ConnectionStateEnum.NotConnected;
+
+        public event PropertyChangedEventHandler PropertyChanged;
+        public void SetPropertyChanged(string propertyName)
+        {
+            this.PropertyChanged.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
     }
 
     public class CommentRecord {
@@ -193,6 +231,9 @@ namespace KnzkLiveCommentViewer
 
     [DataContract]
     public class KnzkLiveLiveInformation {
+        [DataMember(Name = "name")]
+        public string Name { get; set; }
+
         [DataMember(Name = "hashtag")]
         public string Hashtag { get; set; }
     }
