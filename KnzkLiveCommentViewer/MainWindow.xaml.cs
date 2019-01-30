@@ -54,8 +54,8 @@ namespace KnzkLiveCommentViewer
                     }
                 }
                 this.Comments.Insert(where, comment);
+                if (where == 0) bouyomichan.say(comment.Content);
             });
-            bouyomichan.say(comment.Content);
         }
 
         private void ChangeConnectionState(ConnectionStateEnum state)
@@ -124,7 +124,47 @@ namespace KnzkLiveCommentViewer
                 Content = "配信情報の取得に成功、ハッシュタグ #" + this.liveInfo.Hashtag,
             });
 
-            var ws = new WebSocket("wss://knzk.me/api/v1/streaming?stream=hashtag&tag=" + System.Uri.EscapeDataString(liveInfo.Hashtag));
+            // 過去ログ取得
+            using (var client = new HttpClient())
+            {
+                var result = await client.GetAsync("https://knzk.me/api/v1/timelines/tag/" + Uri.EscapeDataString(liveInfo.Hashtag));
+                Console.WriteLine(result.ToString());
+                if (!result.IsSuccessStatusCode)
+                {
+                    this.AddComment(new CommentRecord
+                    {
+                        Type = "Sys",
+                        UserName = "Warning",
+                        Content = "Mastodonからの過去ログ取得に失敗(HTTP_STATUS=" + result.StatusCode + ")",
+                    });
+                    this.ChangeConnectionState(ConnectionStateEnum.NotConnected);
+                    return;
+                }
+                using (var stream = await result.Content.ReadAsStreamAsync())
+                {
+                    var serializer = new DataContractJsonSerializer(typeof(MastodonStatus[]));
+                    var statuses = (MastodonStatus[])serializer.ReadObject(stream);
+                    foreach (var status in statuses)
+                    {
+                        var record = new CommentRecord
+                        {
+                            Type = "丼",
+                            UserName = status.Account.Name,
+                            Content = Regex.Replace(status.Content, "<.+?>", "").Replace("#" + this.liveInfo.Hashtag, ""),
+                            CreatedAt = DateTime.Parse(status.CreatedAt),
+                        };
+                        this.AddComment(record);
+                    }
+                    this.AddComment(new CommentRecord
+                    {
+                        Type = "Sys",
+                        UserName = "Info",
+                        Content = "Mastodonから過去ログを取得しました",
+                    });
+                }
+            }
+
+            var ws = new WebSocket("wss://knzk.me/api/v1/streaming?stream=hashtag&tag=" + Uri.EscapeDataString(liveInfo.Hashtag));
             ws.SslConfiguration.EnabledSslProtocols = System.Security.Authentication.SslProtocols.Tls12;
             
             ws.OnOpen += (_s, _e) =>
