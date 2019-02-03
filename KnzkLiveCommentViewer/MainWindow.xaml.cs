@@ -18,6 +18,7 @@ using System.Text.RegularExpressions;
 using System.Net.Http;
 using WebSocketSharp;
 using System.ComponentModel;
+using System.Timers;
 
 namespace KnzkLiveCommentViewer
 {
@@ -200,6 +201,15 @@ namespace KnzkLiveCommentViewer
                     Content = serviceName + "のストリームに接続しました",
                 });
                 this.ChangeConnectionState(ConnectionStateEnum.Connected);
+
+                var pingTimer = new Timer(10 * 1000);
+                pingTimer.Elapsed += (__s, __e) =>
+                {
+                    Console.WriteLine("send ping");
+                    ws.Send("ping");
+                };
+                pingTimer.AutoReset = true;
+                pingTimer.Enabled = true;
             };
 
             ws.OnMessage += (_s, _e) =>
@@ -210,7 +220,10 @@ namespace KnzkLiveCommentViewer
                 var streamEvent = (MastodonStreamingEvent)eventContainerSerializer.ReadObject(dataStream);
                 if (streamEvent.EventType != "update")
                 {
-                    Console.WriteLine("eventtype is not update: " + streamEvent.EventType);
+                    if (streamEvent.EventType != "pong")
+                    {
+                        Console.WriteLine("eventtype is not update: " + streamEvent.EventType);
+                    }
                     return;
                 }
                 dataStream.Close();
