@@ -124,56 +124,28 @@ namespace KnzkLiveCommentViewer
                 Content = "配信情報の取得に成功、ハッシュタグ #" + this.liveInfo.Hashtag,
             });
 
-            this.MastodonConnect();
+            this.MastodonConnect(
+                "Mastodon",
+                "",
+                "https://knzk.me/api/v1/timelines/tag/" + Uri.EscapeDataString(liveInfo.Hashtag),
+                "wss://knzk.me/api/v1/streaming?stream=hashtag&tag=" + Uri.EscapeDataString(liveInfo.Hashtag)
+            );
 
-            var ws = new WebSocket("wss://live.knzk.me/api/streaming/live/" + id);
-            ws.SslConfiguration.EnabledSslProtocols = System.Security.Authentication.SslProtocols.Tls12;
-
-            ws.OnOpen += (_s, _e) =>
-            {
-                this.AddComment(new CommentRecord
-                {
-                    Type = "Sys",
-                    UserName = "Info",
-                    Content = "KnzkLiveのストリームに接続しました",
-                });
-                this.ChangeConnectionState(ConnectionStateEnum.Connected);
-            };
-
-            ws.OnMessage += (_s, _e) =>
-            {
-                Console.WriteLine("event" + _e.Data);
-                var dataStream = new MemoryStream(Encoding.UTF8.GetBytes(_e.Data));
-                var eventContainerSerializer = new DataContractJsonSerializer(typeof(MastodonStreamingEvent));
-                var streamEvent = (MastodonStreamingEvent)eventContainerSerializer.ReadObject(dataStream);
-                if (streamEvent.EventType != "update")
-                {
-                    Console.WriteLine("eventtype is not update: " + streamEvent.EventType);
-                    return;
-                }
-                dataStream.Close();
-                dataStream = new MemoryStream(Encoding.UTF8.GetBytes(streamEvent.Payload));
-                var statusSerializer = new DataContractJsonSerializer(typeof(MastodonStatus));
-                var status = (MastodonStatus)statusSerializer.ReadObject(dataStream);
-                var record = new CommentRecord
-                {
-                    Type = "ﾛｰｶﾙ",
-                    UserName = status.Account.Name,
-                    Content = Regex.Replace(status.Content, "<.+?>", "").Replace("#" + this.liveInfo.Hashtag, ""),
-                };
-                if (status.CreatedAt != null) record.CreatedAt = DateTime.Parse(status.CreatedAt);
-                this.AddComment(record);
-            };
-            ws.Connect();
+            this.MastodonConnect(
+                "KnzkLive",
+                "Local",
+                "https://live.knzk.me/api/client/comment_get?id=58",
+                "wss://live.knzk.me/api/streaming/live/" + id
+            );
         }
 
-        public async void MastodonConnect()
+        public async void MastodonConnect(string serviceName, string serviceType, string httpApi, string websocketApi)
         {
             
             // 過去ログ取得
             using (var client = new HttpClient())
             {
-                var result = await client.GetAsync("https://knzk.me/api/v1/timelines/tag/" + Uri.EscapeDataString(liveInfo.Hashtag));
+                var result = await client.GetAsync(httpApi);
                 Console.WriteLine(result.ToString());
                 if (!result.IsSuccessStatusCode)
                 {
@@ -181,7 +153,7 @@ namespace KnzkLiveCommentViewer
                     {
                         Type = "Sys",
                         UserName = "Warning",
-                        Content = "Mastodonからの過去ログ取得に失敗(HTTP_STATUS=" + result.StatusCode + ")",
+                        Content = serviceName + "からの過去ログ取得に失敗(HTTP_STATUS=" + result.StatusCode + ")",
                     });
                     this.ChangeConnectionState(ConnectionStateEnum.NotConnected);
                     return;
@@ -194,23 +166,30 @@ namespace KnzkLiveCommentViewer
                     {
                         var record = new CommentRecord
                         {
-                            Type = "丼",
+                            Type = serviceType,
                             UserName = status.Account.Name,
                             Content = Regex.Replace(status.Content, "<.+?>", "").Replace("#" + this.liveInfo.Hashtag, ""),
                             CreatedAt = DateTime.Parse(status.CreatedAt),
                         };
+                        if (status.CreatedAt != null)
+                        {
+                            record.CreatedAt = DateTime.Parse(status.CreatedAt);
+                        } else
+                        {
+                            record.CreatedAt = new DateTime(0);
+                        }
                         this.AddComment(record);
                     }
                     this.AddComment(new CommentRecord
                     {
                         Type = "Sys",
                         UserName = "Info",
-                        Content = "Mastodonから過去ログを取得しました",
+                        Content = serviceName + "から過去ログを取得しました",
                     });
                 }
             }
 
-            var ws = new WebSocket("wss://knzk.me/api/v1/streaming?stream=hashtag&tag=" + Uri.EscapeDataString(liveInfo.Hashtag));
+            var ws = new WebSocket(websocketApi);
             ws.SslConfiguration.EnabledSslProtocols = System.Security.Authentication.SslProtocols.Tls12;
             
             ws.OnOpen += (_s, _e) =>
@@ -218,7 +197,7 @@ namespace KnzkLiveCommentViewer
                 this.AddComment(new CommentRecord {
                     Type = "Sys",
                     UserName = "Info",
-                    Content = "Mastodonのストリームに接続しました",
+                    Content = serviceName + "のストリームに接続しました",
                 });
                 this.ChangeConnectionState(ConnectionStateEnum.Connected);
             };
@@ -240,11 +219,11 @@ namespace KnzkLiveCommentViewer
                 var status = (MastodonStatus)statusSerializer.ReadObject(dataStream);
                 var record = new CommentRecord
                 {
-                    Type = "丼",
+                    Type = serviceType,
                     UserName = status.Account.Name,
                     Content = Regex.Replace(status.Content, "<.+?>", "").Replace("#" + this.liveInfo.Hashtag, ""),
-                    CreatedAt = DateTime.Parse(status.CreatedAt),
                 };
+                if (status.CreatedAt != null) record.CreatedAt = DateTime.Parse(status.CreatedAt);
                 this.AddComment(record);
             };
             ws.Connect();
