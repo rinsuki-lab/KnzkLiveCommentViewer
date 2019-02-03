@@ -20,25 +20,31 @@ namespace KnzkLiveCommentViewer
         }
         public void say(string text)
         {
-            var client = new TcpClient(this.host, this.port);
-            using (NetworkStream ns = client.GetStream())
+            try
             {
-                using (BinaryWriter bw = new BinaryWriter(ns))
+                var client = new TcpClient(this.host, this.port);
+                using (NetworkStream ns = client.GetStream())
                 {
-                    bw.Write((Int16)0x0001);
-                    bw.Write((Int16)(-1));
-                    bw.Write((Int16)(-1));
-                    bw.Write((Int16)(-1));
-                    bw.Write((Int16)0);
-                    bw.Write((byte)0);
-                    var utf8Encoded = Encoding.UTF8.GetBytes(text);
-                    bw.Write((Int32)utf8Encoded.Length);
-                    bw.Write(utf8Encoded);
-                    bw.Close();
+                    using (BinaryWriter bw = new BinaryWriter(ns))
+                    {
+                        bw.Write((Int16)0x0001);
+                        bw.Write((Int16)(-1));
+                        bw.Write((Int16)(-1));
+                        bw.Write((Int16)(-1));
+                        bw.Write((Int16)0);
+                        bw.Write((byte)0);
+                        var utf8Encoded = Encoding.UTF8.GetBytes(text);
+                        bw.Write((Int32)utf8Encoded.Length);
+                        bw.Write(utf8Encoded);
+                        bw.Close();
+                    }
+                    ns.Close();
                 }
-                ns.Close();
+                client.Close();
+            } catch
+            {
+                Console.WriteLine("棒読みちゃんに接続できませんでした");
             }
-            client.Close();
         }
     }
 }
