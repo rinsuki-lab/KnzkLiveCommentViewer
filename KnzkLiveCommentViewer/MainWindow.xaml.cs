@@ -124,6 +124,52 @@ namespace KnzkLiveCommentViewer
                 Content = "配信情報の取得に成功、ハッシュタグ #" + this.liveInfo.Hashtag,
             });
 
+            this.MastodonConnect();
+
+            var ws = new WebSocket("wss://live.knzk.me/api/streaming/live/" + id);
+            ws.SslConfiguration.EnabledSslProtocols = System.Security.Authentication.SslProtocols.Tls12;
+
+            ws.OnOpen += (_s, _e) =>
+            {
+                this.AddComment(new CommentRecord
+                {
+                    Type = "Sys",
+                    UserName = "Info",
+                    Content = "KnzkLiveのストリームに接続しました",
+                });
+                this.ChangeConnectionState(ConnectionStateEnum.Connected);
+            };
+
+            ws.OnMessage += (_s, _e) =>
+            {
+                Console.WriteLine("event" + _e.Data);
+                var dataStream = new MemoryStream(Encoding.UTF8.GetBytes(_e.Data));
+                var eventContainerSerializer = new DataContractJsonSerializer(typeof(MastodonStreamingEvent));
+                var streamEvent = (MastodonStreamingEvent)eventContainerSerializer.ReadObject(dataStream);
+                if (streamEvent.EventType != "update")
+                {
+                    Console.WriteLine("eventtype is not update: " + streamEvent.EventType);
+                    return;
+                }
+                dataStream.Close();
+                dataStream = new MemoryStream(Encoding.UTF8.GetBytes(streamEvent.Payload));
+                var statusSerializer = new DataContractJsonSerializer(typeof(MastodonStatus));
+                var status = (MastodonStatus)statusSerializer.ReadObject(dataStream);
+                var record = new CommentRecord
+                {
+                    Type = "ﾛｰｶﾙ",
+                    UserName = status.Account.Name,
+                    Content = Regex.Replace(status.Content, "<.+?>", "").Replace("#" + this.liveInfo.Hashtag, ""),
+                };
+                if (status.CreatedAt != null) record.CreatedAt = DateTime.Parse(status.CreatedAt);
+                this.AddComment(record);
+            };
+            ws.Connect();
+        }
+
+        public async void MastodonConnect()
+        {
+            
             // 過去ログ取得
             using (var client = new HttpClient())
             {
